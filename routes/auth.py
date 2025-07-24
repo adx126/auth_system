@@ -27,6 +27,12 @@ async def register(
     await auth_instance.create_user_fn(db, schema)
     return {"status": "ok"}
 
-@auth_router.get("/login")
-async def login():
-    pass
+@auth_router.post("/login")
+async def login(
+    request: Request,
+    db: AsyncSession = Depends(auth_instance.get_db)
+):
+    data = await parse_json(request)
+    schema = auth_instance.LoginSchema(**data)
+    await auth_instance.login_user_fn(db, schema)
+    return {"status": "ok"}

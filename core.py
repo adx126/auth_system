@@ -5,6 +5,7 @@ from models.default_user import DefaultUserModel
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 import auth_state
 from schemas.register import RegisterSchema as DefaultRegisterSchema
+from schemas.login import LoginSchema as DefaultLoginSchema
 from pydantic import BaseModel
 from passlib.hash import bcrypt
 from sqlalchemy import select
@@ -15,18 +16,21 @@ class AuthModule:
             app: FastAPI,
             *,
             get_db: Optional[Callable[[], AsyncGenerator[AsyncSession, None]]] = None,
-            user_model: Optional[Type[DeclarativeMeta]] = None,
+            user_model: Optional[Type[DeclarativeMeta]] = DefaultUserModel,
             secret_key: str = None,
             database_url: str = "sqlite+aiosqlite:///./auth.db",
             register_schema: Optional[Type[BaseModel]] = DefaultRegisterSchema,
+            login_schema: Optional[Type[BaseModel]] = DefaultLoginSchema,
             create_user_fn: Optional[Callable[..., Awaitable[Any]]] = None,
             find_user_fn: Optional[Callable[[AsyncSession, BaseModel], Awaitable[Any]]] = None,
             login_user_fn: Optional[Callable[[AsyncSession, BaseModel], Awaitable[Any]]] = None,
     ):
         self.app = app
-        self.user_model = user_model or DefaultUserModel
+        self.user_model = user_model
 
         self.RegisterSchema = register_schema
+
+        self.LoginSchema = login_schema
 
         self.secret_key = secret_key or "defaultsecretkey"
 
