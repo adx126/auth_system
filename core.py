@@ -9,6 +9,8 @@ from schemas.login import LoginSchema as DefaultLoginSchema
 from pydantic import BaseModel
 from passlib.hash import bcrypt
 from sqlalchemy import select
+from jose import JWTError, jwt
+from datetime import datetime, timedelta, timezone
 
 class AuthModule:
     def __init__(
@@ -17,13 +19,15 @@ class AuthModule:
             *,
             get_db: Optional[Callable[[], AsyncGenerator[AsyncSession, None]]] = None,
             user_model: Optional[Type[DeclarativeMeta]] = DefaultUserModel,
-            secret_key: str = None,
+            secret_key: str = "defaultsecretkey",
             database_url: str = "sqlite+aiosqlite:///./auth.db",
             register_schema: Optional[Type[BaseModel]] = DefaultRegisterSchema,
             login_schema: Optional[Type[BaseModel]] = DefaultLoginSchema,
             create_user_fn: Optional[Callable[..., Awaitable[Any]]] = None,
             find_user_fn: Optional[Callable[[AsyncSession, BaseModel], Awaitable[Any]]] = None,
             login_user_fn: Optional[Callable[[AsyncSession, BaseModel], Awaitable[Any]]] = None,
+            jwt_expire_min: int = 15,
+            jwt_algorithm: str = "HS256",
     ):
         self.app = app
         self.user_model = user_model
@@ -32,7 +36,10 @@ class AuthModule:
 
         self.LoginSchema = login_schema
 
-        self.secret_key = secret_key or "defaultsecretkey"
+        self.secret_key = secret_key
+
+        self.jwt_expire_min = jwt_expire_min
+        self.jwt_algorithm = jwt_algorithm
 
         self.get_db = get_db or self._create_default_get_db(database_url)
 
@@ -111,3 +118,17 @@ class AuthModule:
             raise HTTPException(status_code=401, detail="Invalid password")
 
         return user
+    
+    def _default_create_jwt(self, data: BaseModel, expires_delta: timedelta | None = None):
+        user_data = data.dict()
+        expire = datetime.utcnow() + (expires_delta or timedelta(minutes=self.jwt_expire_min))
+        user_data.update({"exp": int(expire.replace(tzinfo=timezone.utc).timestamp())})
+        encoded_jwt = jwt.encode(user_data, self.secret_key, algorithm=self.jwt_algorithm)
+        return encoded_jwt
+    
+    def _default_verify_jwt(self, token: str):
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.jwt_algorithm])
+            return payload
+        except JWTError as e:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
